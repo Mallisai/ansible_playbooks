@@ -1,0 +1,136 @@
+---
+- name: Deploy Whizzard-backend to QA-MONGO2
+  hosts: qa_servers
+  become: yes
+  vars_files:
+    - /var/lib/jenkins/workspace/ansible_whizzard_backend/vault.yml
+
+  vars:
+    ansible_ssh_private_key_file: /var/lib/jenkins/.ssh/easygaadi-erp.pem
+    ansible_python_interpreter: /usr/bin/python3
+
+  tasks:
+    - name: Update package lists
+      apt:
+        update_cache: yes
+
+    - name: Remove conflicting packages (if present)
+      apt:
+        name: "{{ item }}"
+        state: absent
+      loop:
+        - containerd.io
+        - containerd
+
+    - name: Ensure Docker dependencies are installed
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - apt-transport-https
+        - ca-certificates
+        - curl
+        - gnupg
+        - lsb-release
+
+    - name: Add Docker's official GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
+        state: present
+
+    - name: Update package lists (after adding Docker repository)
+      apt:
+        update_cache: yes
+
+    - name: Install Docker
+      apt:
+        name: docker-ce
+        state: present
+
+    - name: Start and enable Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Ensure AWS CLI and Python libraries are installed
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - awscli
+        - python3-pip
+
+    - name: Install boto3 via pip
+      pip:
+        name: boto3
+        executable: pip3
+
+    - name: Install botocore via pip
+      pip:
+        name: botocore
+        executable: pip3
+
+    - name: Clone the application repository (ignoring host key)
+      git:
+        repo: 'git@github.com:srinikandula/wizzard-backend.git'
+        dest: '/home/ubuntu/ansible/'
+        version: NewDocerFileAdded
+        update: no  # This ensures a fresh clone
+        force: yes  # This forces a new clone if the repository already exists
+        key_file: /home/ubuntu/.ssh/id_rsa
+        ssh_opts: '-o StrictHostKeyChecking=no'
+
+    - name: Checkout the NewDocerFileAdded branch
+      shell: |
+        git checkout NewDocerFileAdded
+      args:
+        chdir: /home/ubuntu/ansible/
+
+    - name: Change ownership of the ansible directory
+      file:
+        path: /home/ubuntu/ansible
+        owner: ubuntu
+        group: ubuntu
+        recurse: yes
+
+    - name: Copy .wizzard.properties file from S3
+      command: aws s3 cp s3://ansible-whizzard/qa_properties/.wizzard.properties /home/ubuntu/ansible/
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ aws_access_key_id }}"
+        AWS_SECRET_ACCESS_KEY: "{{ aws_secret_access_key }}"
+
+    - name: change ownership of .wizzard.properties file
+      become: yes
+      become_user: root
+      file:
+        path: /home/ubuntu/ansible/.wizzard.properties
+        owner: ubuntu
+        group: ubuntu
+
+    - name: Build the Docker image
+      command: sudo docker build -t whizzard-backend:latest .
+      args:
+        chdir: /home/ubuntu/ansible
+
+    - name: Run the Whizzard-backend container in host network
+      docker_container:
+        name: whizzard-backend
+        image: whizzard-backend:latest
+        state: started
+        network_mode: host
+        ports:
+          - "8080:8090"
+
+    - name: Ensure the container is running
+      shell: docker ps
+      register: result
+
+    - debug:
+        msg: "{{ result.stdout }}"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 1,1           Top
+
