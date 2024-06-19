@@ -132,5 +132,5 @@
       register: result
 
     - debug:
-        msg: "{{ result.stdout }}"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 1,1           Top
+        msg: "{{ result.stdout }}"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
 
